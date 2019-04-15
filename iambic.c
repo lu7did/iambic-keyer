@@ -3,6 +3,7 @@
 
 /*
 
+
     10/12/2016, Rick Koch / N1GP, I adapted Phil's verilog code from
                 the openHPSDR Hermes iambic.v implementation to build
                 and run on a raspberry PI 3.
@@ -88,15 +89,15 @@ static pthread_t keyer_thread_id;
 // set to 0 to use the PI's hw:0 audio out for sidetone
 #define SIDETONE_GPIO 0 // this is in wiringPi notation
 
-#if 0
-#define KEYER_OUT_GPIO 12
-#define LEFT_PADDLE_GPIO 13
-#define RIGHT_PADDLE_GPIO 15
-#else
+//#if 0
 #define KEYER_OUT_GPIO 12
 #define LEFT_PADDLE_GPIO 15
-#define RIGHT_PADDLE_GPIO 14
-#endif
+#define RIGHT_PADDLE_GPIO 13
+//#else
+//#define KEYER_OUT_GPIO 12
+//#define LEFT_PADDLE_GPIO 15
+//#define RIGHT_PADDLE_GPIO 14
+//#endif
 
 #define KEYER_STRAIGHT 0
 #define KEYER_MODE_A 1
@@ -131,7 +132,7 @@ static int *kdash;
 static int cw_keyer_speed = 20;
 static int cw_keyer_weight = 55;
 static int cw_keys_reversed = 0;
-static int cw_keyer_mode = KEYER_MODE_B;
+static int cw_keyer_mode = KEYER_MODE_A;
 static int cw_keyer_sidetone_frequency = 700;
 static int cw_keyer_sidetone_gain = 10;
 static int cw_keyer_sidetone_envelope = 5;
@@ -158,10 +159,12 @@ void keyer_update() {
 void keyer_event(int gpio, int level, uint32_t tick) {
     int state = (cw_active_state == 0) ? (level == 0) : (level != 0);
 
-    if (gpio == LEFT_PADDLE_GPIO)
+    if (gpio == LEFT_PADDLE_GPIO) {
         kcwl = state;
+    }
     else  // RIGHT_PADDLE_GPIO
-        kcwr = state;
+     {   kcwr = state;
+     }
 
     if (state || cw_keyer_mode == KEYER_STRAIGHT)
         sem_post(&cw_event);
@@ -245,6 +248,7 @@ static void* keyer_thread(void *arg) {
                     kdelay = 0;
                     set_keyer_out(0);
                     key_state = DOTDELAY;        // add inter-character spacing of one dot length
+                    fprintf(stderr,".");
                 }
                 else kdelay++;
 
@@ -263,6 +267,7 @@ static void* keyer_thread(void *arg) {
                 if (kdelay == dash_delay) {
                     kdelay = 0;
                     set_keyer_out(0);
+                    fprintf(stderr,"-");
                     key_state = DASHDELAY;       // add inter-character spacing of one dot length
                 }
                 else kdelay++;
@@ -364,6 +369,7 @@ static void* keyer_thread(void *arg) {
             clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &loop_delay, NULL);
         }
     }
+    //fprintf(stderr,"SIGINT received, terminating");
 }
 
 void sig_handler(int sig) {

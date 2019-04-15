@@ -1,0 +1,19 @@
+#!/bin/sh
+
+
+DPATH="/home/pi/iambic-keyer"
+cd $DPATH
+export `dbus-launch | grep ADDRESS`
+export `dbus-launch | grep PID`
+trap 'echo Terminating...' INT
+sudo pkill jackd
+jackd -P70 -p16 -t2000 -dalsa -dhw:1,0 -p512 -n4 -r48000 -s 2>&1 | tee -a keyer.log &
+PID=$!
+echo "jackd launched($!)"
+./iambic -s 25 -m 2 
+sudo kill $PID 2>&1 | tee -a keyer.log
+sudo pkill jackd 2>&1 | tee -a keyer.log
+echo "********************************************"
+echo "*             Finished iambic-keyer        *"
+echo "********************************************"
+
