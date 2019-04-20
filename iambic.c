@@ -9,6 +9,7 @@
                 and run on a raspberry PI 3.
 
     1/7/2017,   N1GP, adapted to work with Jack Audio, much better timing.
+    4/20/2019,  LU7DID, modified switches, added dynamic control of speed
 
 --------------------------------------------------------------------------------
 This library is free software; you can redistribute it and/or
@@ -28,6 +29,7 @@ Boston, MA  02110-1301, USA.
 
 ---------------------------------------------------------------------------------
         Copywrite (C) Phil Harman VK6PH May 2014
+        Copyright (C) Pedro Colla LU7DID 2019
 ---------------------------------------------------------------------------------
 
         The code implements an Iambic CW keyer.  The following features are supported:
@@ -89,15 +91,12 @@ static pthread_t keyer_thread_id;
 // set to 0 to use the PI's hw:0 audio out for sidetone
 #define SIDETONE_GPIO 0 // this is in wiringPi notation
 
-//#if 0
+// Define output GPIO pin
+
 #define KEYER_OUT_GPIO 12
-#define LEFT_PADDLE_GPIO 15
-#define RIGHT_PADDLE_GPIO 13
-//#else
-//#define KEYER_OUT_GPIO 12
-//#define LEFT_PADDLE_GPIO 15
-//#define RIGHT_PADDLE_GPIO 14
-//#endif
+#define LEFT_PADDLE_GPIO 13
+#define RIGHT_PADDLE_GPIO 15
+#define SPEED_GPIO 19
 
 #define KEYER_STRAIGHT 0
 #define KEYER_MODE_A 1
@@ -139,8 +138,8 @@ static int cw_keyer_sidetone_envelope = 5;
 static int cw_keyer_spacing = 0;
 static int cw_active_state = 0;
 static sem_t cw_event;
-
 static int running, keyer_out = 0;
+const char *programid = "\niambic version 1.0 (c) VK6PH, N1GP, LU7DID 2014-2019\n";
 
 void keyer_update() {
     dot_delay = 1200 / cw_keyer_speed;
@@ -248,7 +247,17 @@ static void* keyer_thread(void *arg) {
                     kdelay = 0;
                     set_keyer_out(0);
                     key_state = DOTDELAY;        // add inter-character spacing of one dot length
-                    fprintf(stderr,".");
+                    if (gpioRead(SPEED_GPIO)==0){
+                       //fprintf(stderr,"-");
+                       
+       		       cw_keyer_speed=cw_keyer_speed-1;
+    		       if (cw_keyer_speed <= 5) {
+                          cw_keyer_speed=5;
+                       }
+                       keyer_update();
+                       printf("Speed set to %d wpm\n",cw_keyer_speed);
+                    } 
+//                    fprintf(stderr,".");
                 }
                 else kdelay++;
 
@@ -267,7 +276,18 @@ static void* keyer_thread(void *arg) {
                 if (kdelay == dash_delay) {
                     kdelay = 0;
                     set_keyer_out(0);
-                    fprintf(stderr,"-");
+                    if (gpioRead(SPEED_GPIO)==0){
+                       //fprintf(stderr,"+");
+  	               cw_keyer_speed=cw_keyer_speed+1;
+                       if (cw_keyer_speed >=50) {
+                          cw_keyer_speed=50;
+                       }
+                       keyer_update();
+                       printf("Speed set to %d wpm\n",cw_keyer_speed);
+
+                    } 
+
+ //                   fprintf(stderr,"-");
                     key_state = DASHDELAY;       // add inter-character spacing of one dot length
                 }
                 else kdelay++;
@@ -369,7 +389,7 @@ static void* keyer_thread(void *arg) {
             clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &loop_delay, NULL);
         }
     }
-    //fprintf(stderr,"SIGINT received, terminating");
+    fprintf(stderr,"\n\nSIGINT received, terminating\n");
 }
 
 void sig_handler(int sig) {
@@ -381,15 +401,17 @@ int main (int argc, char **argv) {
     int i;
     char snd_dev[64]="hw:0";
     struct sched_param param;
-
+    printf("%s",programid);
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-')
             switch (argv[i][1]) {
-            case 'a':
+            case 'a': 
                 cw_active_state = atoi(argv[++i]);
+                printf("A: %d\n",cw_active_state);
                 break;
             case 'c':
                 cw_keyer_spacing = atoi(argv[++i]);
+                printf("C: %d\n",cw_keyer_spacing);
                 break;
             case 'd':
                 strcpy(snd_dev, argv[++i]);
@@ -400,18 +422,23 @@ int main (int argc, char **argv) {
                 break;
             case 'f':
                 cw_keyer_sidetone_frequency = atoi(argv[++i]);
+                printf("F: %d\n",cw_keyer_sidetone_frequency);
                 break;
             case 'g':/* gain in dB */
                 cw_keyer_sidetone_gain = atoi(argv[++i]);
+                printf("G: %d\n",cw_keyer_sidetone_gain);
                 break;
             case 'm':
                 cw_keyer_mode = atoi(argv[++i]);
+                printf("G: %d\n",cw_keyer_mode);
                 break;
             case 's':
                 cw_keyer_speed = atoi(argv[++i]);
+                printf("S: %d\n",cw_keyer_speed);
                 break;
             case 'w':
                 cw_keyer_weight = atoi(argv[++i]);
+                printf("W: %d\n",cw_keyer_weight);
                 break;
             default:
                 fprintf(stderr,
@@ -440,11 +467,19 @@ int main (int argc, char **argv) {
     gpioSetMode(RIGHT_PADDLE_GPIO, PI_INPUT);
     gpioSetPullUpDown(RIGHT_PADDLE_GPIO,PI_PUD_UP);
     usleep(100000);
+
     gpioSetAlertFunc(RIGHT_PADDLE_GPIO, keyer_event);
+
     gpioSetMode(LEFT_PADDLE_GPIO, PI_INPUT);
     gpioSetPullUpDown(LEFT_PADDLE_GPIO,PI_PUD_UP);
     usleep(100000);
+
     gpioSetAlertFunc(LEFT_PADDLE_GPIO, keyer_event);
+
+    gpioSetMode(SPEED_GPIO, PI_INPUT);
+    gpioSetPullUpDown(SPEED_GPIO,PI_PUD_UP);
+    usleep(100000);
+
     gpioSetMode(KEYER_OUT_GPIO, PI_OUTPUT);
     gpioWrite(KEYER_OUT_GPIO, 0);
 
@@ -455,6 +490,7 @@ int main (int argc, char **argv) {
         return 1;
     }
 
+    printf("Ready to operate\n");
     if (SIDETONE_GPIO)
         softToneCreate(SIDETONE_GPIO);
     else {
