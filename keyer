@@ -2,7 +2,7 @@
 #//*========================================================================
 #// keyer
 #//
-#// keyer [speed wpm]}
+#// keyer start|stop|restart
 #//
 #// Iambic keyer for the Raspberry Pi.
 #// See accompanying README file for a description on how to use this code.
@@ -29,27 +29,52 @@
 #-----------------------------------------------------------------------------
 DPATH="/home/pi/iambic-keyer"
 cd $DPATH
-export `dbus-launch | grep ADDRESS`
-export `dbus-launch | grep PID`
-trap 'echo Terminating...' INT
 
-#*-----------------------------------------------------------------------------
-#* Load jackd server as a background process
-#*-----------------------------------------------------------------------------
-jackd -P70 -p16 -t2000 -dalsa -dhw:1,0 -p512 -n4 -r48000 -s 2> /dev/null >> keyer.log &
-PID=$!
+case "$1" in
+start)   echo -n "keyer $(date): Start keyer services" 2>&1 | tee -a $DPATH/keyer.log
+         PIDL=$(sudo pgrep iambic)
+         N=0
+         for line in $PIDL; do
+           if [ $line -ne $$ ] 
+           then
+              N=$(( $N + 1 ))
+           fi
+         done
 
-#*-----------------------------------------------------------------------------
-#* Load iambic
-#*-----------------------------------------------------------------------------
-./iambic -s $1 -m 2 2> /dev/null 
+         if [ $N \> 0 ]; then
+            echo "keyer $(date): keyer program running, exit(1)"  2>&1 | tee -a $DPATH/keyer.log
+            exit 1
+         fi
 
-#*-----------------------------------------------------------------------------
-#* Terminate
-#*-----------------------------------------------------------------------------
-sudo kill $PID 2>&1 | tee -a keyer.log
-sudo pkill jackd 2>&1 | tee -a keyer.log
-echo "********************************************"
-echo "*             Finished iambic-keyer        *"
-echo "********************************************"
+         export `dbus-launch | grep ADDRESS`
+         export `dbus-launch | grep PID`
+         trap 'echo Terminating...' INT
 
+         #*-----------------------------------------------------------------------------
+         #* Load jackd server as a background process
+         #*-----------------------------------------------------------------------------
+         jackd -P70 -p16 -t2000 -dalsa -dhw:1,0 -p512 -n4 -r48000 -s  &
+         #PID=$!
+
+         #*-----------------------------------------------------------------------------
+         #* Load iambic
+         #*-----------------------------------------------------------------------------
+         /home/pi/iambic-keyer/iambic -s 20 -m 2 & 
+         #*-----------------------------------------------------------------------------
+         #* Terminate
+         #*-----------------------------------------------------------------------------
+         exit 0
+         ;;
+stop)   echo -n "Keyer $(date): Stop keyer services\n"  2>&1 | tee -a $DPATH/keyer.log
+        echo "Keyer $(date): Stop jackd PID(" $(pgrep 'jackd') ") " $(sudo pkill 'jackd')  2>&1 | tee -a $DPATH/keyer.log
+        ;;
+restart)
+        echo -n "Keyer $(date): Keyer restart"  2>&1 | tee -a $DPATH/keyer.log
+        $0 stop
+        $0 start
+        ;;
+*)   echo "Usage: $0 start|stop|restart"  2>&1 | tee -a $DPATH/keyer.log
+        exit 1
+        ;;
+esac
+exit 0

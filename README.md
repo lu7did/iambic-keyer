@@ -7,6 +7,14 @@
         Check out the GPIO assignments in iambic.c and suite them
         to your board.
 
+        LU7DID wiring
+ 
+             GPIO 12 Key Out
+             GPIO 19 Speed sensor
+             GPIO 13 Dash
+             GPIO 15 Dot
+   
+
         This code implements an Iambic CW keyer.  The following features are supported:
 
                 * Variable speed control from 1 to 60 WPM
@@ -45,5 +53,15 @@
         This version of iambic-keyer uses Jack Audio Connection.  
         This is a good intro for getting Jack setup on the PI:  
            http://wiki.linuxaudio.org/wiki/raspberrypi#audio_software_repository
-
+        execute with
+           jackd -P70 -p16 -t2000 -dalsa -dhw:1,0 -p512 -n4 -r48000 -s
         You need to run this using sudo to use the pigpio functions.  
+
+        ====================================================================================================
+        keyer {start | stop | reload}
+  
+        Script to enable and disable the keyer at startup 
+
+        To launch automatically at reboot add the following line to crontab
+
+        @reboot sudo /home/pi/iambic-keyer/keyer start > /home/pi/cronjoblog 2>&1
